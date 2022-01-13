@@ -40,15 +40,29 @@ def G(w, Xs):
     list of data points Xs to be fitted.'''
     n = len(Xs)
     P = projection_matrix(w)
-    Ys = [np.dot(P, X) for X in Xs]
-    A = calc_A(Ys)
+
+    # Xs = np.array(Xs)
+    Xst = np.transpose(Xs)
+    Ys = np.matmul(P,Xst)
+    Yst = np.transpose(Ys)
+    A = np.matmul(Ys, Yst)
     A_hat = calc_A_hat(A, skew_matrix(w))
 
-    
-    u = sum(np.dot(Y, Y) for Y in Ys) / n
-    v = np.dot(A_hat, sum(np.dot(Y, Y) * Y for Y in Ys)) / np.trace(np.dot(A_hat, A))
+    u = np.sum(np.multiply(Ys, Ys))/n
+    yy = np.sum(np.multiply(Ys, Ys), axis = 0)
+    yy = np.reshape(yy, (n, 1))
+    yy2 = np.repeat(yy, 3, axis = 1)
+    yy3 = np.multiply(yy2, Yst)
+    yy4 = np.sum(yy3, axis=0)
+    v = np.dot(A_hat, yy4)/ np.trace(np.dot(A_hat, A))
 
-    return sum((np.dot(Y, Y) - u - 2 * np.dot(Y, v)) ** 2 for Y in Ys)
+    v = np.reshape(v, (3,1))
+    v_mat = np.repeat(v, n, axis=1)
+    yv = np.sum(np.multiply(Ys, v_mat), axis = 0)
+    yv = np.reshape(yv, (n, 1))
+    res = np.sum((yy - u-2*yv)**2)
+
+    return res
 
 def C(w, Xs):
     '''Calculate the cylinder center given the cylinder direction and 
@@ -88,8 +102,8 @@ def fit(data, guess_angles=None):
         Radius of the cylinder
         Fitting error (G function)
     '''
-    Xs, t = preprocess_data(data)  
-
+    Xs, t = preprocess_data(data)
+    Xs2 = np.array(Xs)
     # Set the start points
 
     start_points = [(0, 0), (np.pi / 2, 0), (np.pi / 2, np.pi / 2)]
@@ -102,13 +116,17 @@ def fit(data, guess_angles=None):
     best_score = float('inf')
 
     for sp in start_points:
-        fitted = minimize(lambda x : G(direction(x[0], x[1]), Xs),
+        fitted = minimize(lambda x : G(direction(x[0], x[1]), Xs2),
                     sp, method='Powell', tol=1e-6)
 
         if fitted.fun < best_score:
             best_score = fitted.fun
             best_fit = fitted
 
-    w = direction(best_fit.x[0], best_fit.x[1])
+    w_fit = direction(best_fit.x[0], best_fit.x[1])
 
-    return w, C(w, Xs) + t, r(w, Xs), best_fit.fun 
+    C_fit = C(w_fit, Xs) + t
+    r_fit = r(w_fit, Xs)
+    fit_err =  best_fit.fun
+
+    return w_fit, C_fit, r_fit, fit_err
